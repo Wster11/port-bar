@@ -1,0 +1,33 @@
+---
+description: Rust / Tauri backend conventions
+globs: src-tauri/**/*.rs
+alwaysApply: false
+---
+
+# Rust / Tauri conventions
+
+- Commands never block: sync `#[tauri::command]` runs on the main thread and freezes
+  the UI. Use `async fn` + `tauri::async_runtime::spawn_blocking` for shell-outs/sleeps.
+- Return `AppResult<T>`; add a variant to `AppError` instead of `String` errors.
+  `Display` text is English (logs only); map the variant to a `code` in
+  `AppError::payload` — the frontend localizes it. Native UI text (tray menu)
+  picks zh/en via `locale::is_chinese()`.
+- No `unwrap()`/`expect()` outside `lib.rs` startup and tests. Ignoring window
+  operation results (`let _ = window.hide()`) is fine for best-effort UI actions.
+- Every `unsafe` block needs a `// SAFETY:` comment.
+- Invoke system binaries by absolute path (`/usr/sbin/lsof`) — GUI apps get a minimal `PATH`.
+- Keep parsing pure and unit-tested with captured fixture output.
+
+```rust
+// ❌ blocks the main thread
+#[tauri::command]
+fn list() -> Vec<ListeningPort> { ports::list_listening_ports().unwrap() }
+
+// ✅
+#[tauri::command]
+pub async fn list_listening_ports() -> AppResult<Vec<ListeningPort>> {
+    tauri::async_runtime::spawn_blocking(ports::list_listening_ports)
+        .await
+        .map_err(|e| AppError::Task(e.to_string()))?
+}
+```

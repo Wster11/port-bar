@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <title>PortBar</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="title-block">
+        <h1 data-i18n="title"></h1>
+        <p id="summary" class="subtitle" data-i18n="loading"></p>
+      </div>
+      <button id="refresh" class="icon-btn" data-i18n-title="refresh">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M13.2 8.6A5.3 5.3 0 1 1 11.6 4" />
+          <path d="M12 1.6v2.9H9.1" />
+        </svg>
+      </button>
+    </header>
+
+    <label class="search">
+      <svg viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="7" cy="7" r="4.6" />
+        <path d="m10.4 10.4 3.4 3.4" />
+      </svg>
+      <input
+        id="search"
+        type="search"
+        data-i18n-placeholder="searchPlaceholder"
+        autocomplete="off"
+        spellcheck="false"
+      />
+    </label>
+
+    <div id="banner" class="banner" role="alert" hidden></div>
+
+    <main class="scroll">
+      <ul id="list" class="group" hidden></ul>
+      <div id="empty" class="empty" hidden>
+        <svg viewBox="0 0 64 64" aria-hidden="true">
+          <rect x="10" y="12" width="44" height="32" rx="6" />
+          <path d="M22 44v8M32 44v8M42 44v8M21 23v10M32 23v10M43 23v10" />
+        </svg>
+        <p id="empty-text"></p>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <span class="hint" data-i18n="hint"></span>
+      <button id="quit" class="text-btn" data-i18n="quit"></button>
+    </footer>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+
+    <template id="icon-xmark">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4.5 4.5 7 7m0-7-7 7" /></svg>
+    </template>
+  </body>
+</html>

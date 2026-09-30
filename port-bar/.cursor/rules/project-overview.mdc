@@ -1,0 +1,41 @@
+---
+description: PortBar architecture, layout and workflow
+alwaysApply: true
+---
+
+# PortBar
+
+macOS menu bar app (Tauri 2 + vanilla TypeScript) that lists TCP ports in LISTEN
+state with process name / PID and can kill the owning process.
+
+## Layout
+
+- `src/` — frontend (Vite, no framework)
+  - `types.ts` mirrors Rust structs; `api.ts` is the only place calling `invoke`/`listen`
+  - `main.ts` owns state + DOM rendering
+  - `i18n.ts` zh/en message bundles; locale comes from the `system_locale` command
+- `src-tauri/src/`
+  - `ports.rs` — pure domain logic: `lsof` parsing, signal sending (unit-tested)
+  - `commands.rs` — thin `#[tauri::command]` wrappers, run work on `spawn_blocking`
+  - `tray.rs` — tray icon, menu, panel toggle/positioning
+  - `error.rs` — `AppError`, serialized as `{ code, pid?, detail? }`
+  - `locale.rs` — system language detection (`sys-locale`)
+  - `lib.rs` — builder wiring only
+
+## Contracts
+
+- Adding a command: implement in `ports.rs` → wrap in `commands.rs` → register in
+  `generate_handler!` → add typed wrapper in `src/api.ts` → mirror types in `src/types.ts`.
+- Rust structs use `#[serde(rename_all = "camelCase")]`; TS types must match exactly.
+- Event names are constants on both sides (`panel-shown`).
+
+## Commands
+
+- `pnpm tauri dev` — run app; `pnpm build` — typecheck + bundle frontend
+- `cargo test --manifest-path src-tauri/Cargo.toml` — Rust unit tests
+- `cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings`
+- `pnpm tauri build` — produce `.app` / `.dmg`
+
+## Before finishing a change
+
+Run `pnpm build`, `cargo clippy -- -D warnings` and `cargo test`; all must pass.

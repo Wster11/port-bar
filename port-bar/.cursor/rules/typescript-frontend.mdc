@@ -1,0 +1,37 @@
+---
+description: Frontend TypeScript conventions
+globs: src/**/*.ts
+alwaysApply: false
+---
+
+# Frontend conventions
+
+- `strict` + `noUncheckedIndexedAccess` are on; no `any`, no non-null `!` on DOM lookups
+  (use the `$()` helper which throws on missing elements).
+- Only `src/api.ts` imports `@tauri-apps/api`; components call its typed wrappers.
+- Render untrusted data (process names, users) with `textContent`, never `innerHTML`.
+- Surface every rejected `invoke` in `state.error` via `describeError()`;
+  never swallow errors silently.
+- Destructive actions need confirmation. Use the inline two-click pattern —
+  `window.confirm` is unreliable in Tauri webviews.
+- Floating promises are explicit: `void refresh()`.
+
+# i18n (zh / en, follows system language)
+
+- No user-visible literals in TS or HTML. Add the key to `zh` in `src/i18n.ts`;
+  `en` is typed as `Messages`, so a missing translation fails `tsc`.
+- Static markup uses `data-i18n`, `data-i18n-placeholder`, `data-i18n-title`.
+- Dynamic text calls `t().key` at render time (never cache the string).
+- Backend errors arrive as `{ code, pid?, detail? }`; add new codes to
+  `AppErrorCode` and both `errors` tables.
+
+```ts
+// ❌
+li.innerHTML = `<b>${entry.processName}</b>`;
+button.textContent = "结束";
+
+// ✅
+name.textContent = entry.processName;
+button.textContent = t().kill;
+await killProcess(pid).catch((e) => (state.error = describeError(e)));
+```
