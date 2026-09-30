@@ -4,6 +4,14 @@ A lightweight macOS menu bar app that shows which local TCP ports are being list
 
 Built with [Tauri 2](https://tauri.app), Rust and vanilla TypeScript.
 
+<p align="center">
+  <img src="docs/screenshots/light.png" width="360" alt="PortBar in light mode listing listening ports grouped by process" />
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/dark.png" width="360" alt="PortBar in dark mode with a kill confirmation on the java process" />
+</p>
+
+<p align="center"><sub>Light mode (left) and dark mode with a pending kill confirmation (right). In the app, the panel background is translucent system vibrancy.</sub></p>
+
 ## Features
 
 - **Menu bar only** — no Dock icon; click the tray icon to open a native-looking popover with system vibrancy (Liquid Glass on macOS 26+).
