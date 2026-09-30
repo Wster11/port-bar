@@ -1,11 +1,18 @@
 import {
+  copyToClipboard,
+  getHomeDir,
   getSystemLocale,
   killProcess,
   listListeningPorts,
   onPanelShown,
+  openInBrowser,
   quitApp,
+  revealInFinder,
   runningInTauri,
+  showContextMenu,
+  type ContextMenuEntry,
 } from "./api";
+import { displayCommand, displayDirectory } from "./format";
 import { describeError, resolveLocale, setLocale, t } from "./i18n";
 import type { ListeningPort, ProcessGroup } from "./types";
 
@@ -19,6 +26,7 @@ interface AppState {
   loading: boolean;
   loadedOnce: boolean;
   error: string | null;
+  homeDir: string;
   /** PID currently waiting for a second click to confirm the kill. */
   pendingKillPid: number | null;
   killingPid: number | null;
@@ -30,10 +38,13 @@ const state: AppState = {
   loading: false,
   loadedOnce: false,
   error: null,
+  homeDir: "",
   pendingKillPid: null,
   killingPid: null,
 };
 
+/** Groups from the last render, for context-menu lookups. */
+let renderedGroups = new Map<number, ProcessGroup>();
 let confirmTimer: number | undefined;
 let toastTimer: number | undefined;
 
@@ -54,6 +65,7 @@ const els = {
   summary: $<HTMLParagraphElement>("#summary"),
   toast: $<HTMLDivElement>("#toast"),
   xmarkTemplate: $<HTMLTemplateElement>("#icon-xmark"),
+  folderTemplate: $<HTMLTemplateElement>("#icon-folder"),
 };
 
 function groupByProcess(ports: ListeningPort[]): ProcessGroup[] {
@@ -61,7 +73,14 @@ function groupByProcess(ports: ListeningPort[]): ProcessGroup[] {
   for (const entry of ports) {
     let group = groups.get(entry.pid);
     if (!group) {
-      group = { pid: entry.pid, processName: entry.processName, user: entry.user, ports: [] };
+      group = {
+        pid: entry.pid,
+        processName: entry.processName,
+        user: entry.user,
+        command: entry.command,
+        cwd: entry.cwd,
+        ports: [],
+      };
       groups.set(entry.pid, group);
     }
     const existing = group.ports.find((p) => p.port === entry.port);
@@ -76,6 +95,8 @@ function matchesQuery(group: ProcessGroup, q: string): boolean {
   return (
     group.processName.toLowerCase().includes(q) ||
     String(group.pid).includes(q) ||
+    group.command.toLowerCase().includes(q) ||
+    (group.cwd?.toLowerCase().includes(q) ?? false) ||
     group.ports.some((p) => String(p.port).includes(q) || p.addresses.some((a) => a.includes(q)))
   );
 }
@@ -97,7 +118,7 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-type RowAction = "kill" | "cancel";
+type RowAction = "kill" | "cancel" | "open" | "more-ports";
 
 function actionButton(action: RowAction, pid: number, className: string): HTMLButtonElement {
   const button = el("button", className);
@@ -133,8 +154,31 @@ function renderActions(pid: number): HTMLDivElement {
   return actions;
 }
 
+function renderPorts(group: ProcessGroup): HTMLDivElement {
+  const line = el("div", "ports");
+  for (const { port, addresses } of group.ports.slice(0, MAX_VISIBLE_PORTS)) {
+    const pill = actionButton("open", group.pid, "pill");
+    pill.dataset.port = String(port);
+    pill.textContent = `:${port}`;
+    pill.title = `${t().openPortHint(port)}\n${addresses.map((a) => `${a}:${port}`).join("\n")}`;
+    line.append(pill);
+  }
+  const hidden = group.ports.length - MAX_VISIBLE_PORTS;
+  if (hidden > 0) {
+    const more = actionButton("more-ports", group.pid, "pill more");
+    more.textContent = `+${hidden}`;
+    more.title = group.ports
+      .slice(MAX_VISIBLE_PORTS)
+      .map((p) => `:${p.port}`)
+      .join(" ");
+    line.append(more);
+  }
+  return line;
+}
+
 function renderRow(group: ProcessGroup): HTMLLIElement {
   const li = el("li", "row");
+  li.dataset.pid = String(group.pid);
 
   const name = group.processName || t().unknownProcess;
   const info = el("div", "info");
@@ -142,30 +186,31 @@ function renderRow(group: ProcessGroup): HTMLLIElement {
   const nameEl = el("span", "name", name);
   nameEl.title = name;
   titleLine.append(nameEl, el("span", "pid", `PID ${group.pid}`));
+  info.append(titleLine);
 
-  const portsLine = el("div", "ports");
-  for (const { port, addresses } of group.ports.slice(0, MAX_VISIBLE_PORTS)) {
-    const pill = el("span", "pill", `:${port}`);
-    pill.title = addresses.map((a) => `${a}:${port}`).join("\n");
-    portsLine.append(pill);
-  }
-  const hidden = group.ports.length - MAX_VISIBLE_PORTS;
-  if (hidden > 0) {
-    const more = el("span", "pill more", `+${hidden}`);
-    more.title = group.ports
-      .slice(MAX_VISIBLE_PORTS)
-      .map((p) => `:${p.port}`)
-      .join(" ");
-    portsLine.append(more);
+  const command = displayCommand(group.command, state.homeDir);
+  if (command && command !== name) {
+    const commandEl = el("div", "command", command);
+    commandEl.title = group.command;
+    info.append(commandEl);
   }
 
-  info.append(titleLine, portsLine);
+  const directory = displayDirectory(group.cwd, state.homeDir);
+  if (directory && group.cwd) {
+    const dirEl = el("div", "cwd");
+    dirEl.title = group.cwd;
+    dirEl.append(els.folderTemplate.content.cloneNode(true), el("span", "", directory));
+    info.append(dirEl);
+  }
+
+  info.append(renderPorts(group));
   li.append(info, renderActions(group.pid));
   return li;
 }
 
 function render(): void {
   const groups = visibleGroups();
+  renderedGroups = new Map(groups.map((g) => [g.pid, g]));
   els.list.replaceChildren(...groups.map(renderRow));
   els.list.hidden = groups.length === 0;
   els.refresh.classList.toggle("spinning", state.loading);
@@ -197,6 +242,11 @@ function showToast(message: string): void {
   }, TOAST_DURATION_MS);
 }
 
+function showError(error: unknown): void {
+  state.error = describeError(error);
+  render();
+}
+
 async function refresh(): Promise<void> {
   if (state.loading) return;
   state.loading = true;
@@ -226,15 +276,19 @@ function cancelPendingKill(): boolean {
   return true;
 }
 
+function requestKillConfirmation(pid: number): void {
+  resetPendingKill();
+  state.pendingKillPid = pid;
+  confirmTimer = window.setTimeout(() => {
+    state.pendingKillPid = null;
+    render();
+  }, CONFIRM_TIMEOUT_MS);
+  render();
+}
+
 async function handleKillClick(pid: number): Promise<void> {
   if (state.pendingKillPid !== pid) {
-    resetPendingKill();
-    state.pendingKillPid = pid;
-    confirmTimer = window.setTimeout(() => {
-      state.pendingKillPid = null;
-      render();
-    }, CONFIRM_TIMEOUT_MS);
-    render();
+    requestKillConfirmation(pid);
     return;
   }
 
@@ -260,6 +314,93 @@ async function handleKillClick(pid: number): Promise<void> {
   }
 }
 
+function openPort(port: number): void {
+  openInBrowser(port).catch(showError);
+}
+
+function copy(text: string): void {
+  copyToClipboard(text)
+    .then(() => showToast(t().copied))
+    .catch(showError);
+}
+
+function portMenu(port: number): ContextMenuEntry[] {
+  const url = `http://localhost:${port}`;
+  return [
+    { label: t().openInBrowser(port), action: () => openPort(port) },
+    "separator",
+    { label: t().copyUrl, action: () => copy(url) },
+    { label: t().copyPort, action: () => copy(String(port)) },
+  ];
+}
+
+function processMenu(group: ProcessGroup): ContextMenuEntry[] {
+  const { cwd } = group;
+  const hasDirectory = displayDirectory(cwd, state.homeDir) !== null;
+  return [
+    ...group.ports.slice(0, MAX_VISIBLE_PORTS).map(({ port }) => ({
+      label: t().openInBrowser(port),
+      action: () => openPort(port),
+    })),
+    "separator",
+    { label: t().copyPid, action: () => copy(String(group.pid)) },
+    { label: t().copyCommand, action: () => copy(group.command), enabled: !!group.command },
+    { label: t().copyPath, action: () => cwd && copy(cwd), enabled: hasDirectory },
+    {
+      label: t().revealInFinder,
+      action: () => cwd && revealInFinder(cwd).catch(showError),
+      enabled: hasDirectory,
+    },
+    "separator",
+    { label: t().killEllipsis, action: () => requestKillConfirmation(group.pid) },
+  ];
+}
+
+function hiddenPortsMenu(group: ProcessGroup): ContextMenuEntry[] {
+  return group.ports.slice(MAX_VISIBLE_PORTS).map(({ port }) => ({
+    label: t().openInBrowser(port),
+    action: () => openPort(port),
+  }));
+}
+
+function handleAction(button: HTMLButtonElement): void {
+  const pid = Number(button.dataset.pid);
+  const group = renderedGroups.get(pid);
+  switch (button.dataset.action as RowAction) {
+    case "kill":
+      void handleKillClick(pid);
+      return;
+    case "cancel":
+      cancelPendingKill();
+      return;
+    case "open":
+      cancelPendingKill();
+      openPort(Number(button.dataset.port));
+      return;
+    case "more-ports":
+      cancelPendingKill();
+      if (group) void showContextMenu(hiddenPortsMenu(group));
+      return;
+  }
+}
+
+function handleContextMenu(event: MouseEvent): void {
+  const target = event.target as Element | null;
+  // Keep the native Copy/Paste menu inside the search field.
+  if (target?.closest("input")) return;
+  event.preventDefault();
+  cancelPendingKill();
+
+  const pill = target?.closest<HTMLElement>(".pill[data-port]");
+  if (pill) {
+    void showContextMenu(portMenu(Number(pill.dataset.port)));
+    return;
+  }
+  const row = target?.closest<HTMLElement>(".row");
+  const group = row && renderedGroups.get(Number(row.dataset.pid));
+  if (group) void showContextMenu(processMenu(group));
+}
+
 function bindEvents(): void {
   els.search.addEventListener("input", () => {
     state.query = els.search.value;
@@ -269,10 +410,7 @@ function bindEvents(): void {
   els.refresh.addEventListener("click", () => void refresh());
 
   els.quit.addEventListener("click", () => {
-    quitApp().catch((error: unknown) => {
-      state.error = describeError(error);
-      render();
-    });
+    quitApp().catch(showError);
   });
 
   // Single delegated handler: row actions, or cancel a pending kill when
@@ -281,14 +419,14 @@ function bindEvents(): void {
     const button = (event.target as Element | null)?.closest<HTMLButtonElement>(
       "button[data-action]",
     );
-    const pid = Number(button?.dataset.pid);
-    if (!button || button.disabled || !Number.isInteger(pid)) {
+    if (!button || button.disabled) {
       cancelPendingKill();
       return;
     }
-    if (button.dataset.action === "cancel") cancelPendingKill();
-    else void handleKillClick(pid);
+    handleAction(button);
   });
+
+  document.addEventListener("contextmenu", handleContextMenu);
 
   window.addEventListener("keydown", (event) => {
     if (event.metaKey && event.key.toLowerCase() === "r") {
@@ -323,6 +461,7 @@ async function syncLocale(): Promise<void> {
 
 async function start(): Promise<void> {
   document.documentElement.classList.toggle("is-tauri", runningInTauri());
+  state.homeDir = await getHomeDir().catch(() => "");
   await syncLocale();
   bindEvents();
   await refresh();

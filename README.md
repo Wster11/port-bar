@@ -16,6 +16,8 @@ Built with [Tauri 2](https://tauri.app), Rust and vanilla TypeScript.
 
 - **Menu bar only** — no Dock icon; click the tray icon to open a native-looking popover with system vibrancy (Liquid Glass on macOS 26+).
 - **Listening ports at a glance** — processes are grouped with their name, PID and every port they listen on. Hover a port to see the bound addresses.
+- **Know what each process is** — shows a shortened command line (e.g. `node vite --port 5173`) and the project directory, so you can tell your `node` processes apart.
+- **Open in browser** — click a port to open `http://localhost:<port>`. Right-click a port or row to copy the URL, port, PID, command or path, or to show the directory in Finder.
 - **One-click kill** — click `×`, then confirm. PortBar sends `SIGTERM` and falls back to `SIGKILL` if the process hasn't exited after 1.5 s.
 - **Search** — filter by port, process name, PID or address.
 - **Follows the system language** — English and Simplified Chinese, switched automatically.
@@ -53,6 +55,8 @@ The bundles are written to `src-tauri/target/release/bundle/`.
 | Quit | Right-click the menu bar icon → **Quit PortBar**, or the button in the panel footer |
 | Refresh | `⌘R` or the refresh button (the list also refreshes every time the panel opens) |
 | Search | `⌘F`, then type a port, process name, PID or address |
+| Open a port in the browser | Click the port tag, e.g. `:3000` |
+| Copy / Show in Finder | Right-click a port tag or a row |
 | Kill a process | Click `×`, then **Kill** |
 | Cancel a kill | Click **Cancel**, press `Esc`, click anywhere else, or wait 3 s |
 | Clear search | `Esc` |

@@ -28,6 +28,15 @@ pub enum AppError {
 
     #[error("background task failed: {0}")]
     Task(String),
+
+    #[error("failed to open: {0}")]
+    OpenFailed(String),
+
+    #[error("not an existing absolute directory: {0}")]
+    InvalidPath(String),
+
+    #[error("failed to copy to clipboard: {0}")]
+    ClipboardFailed(String),
 }
 
 /// Wire format consumed by `AppErrorPayload` in `src/types.ts`.
@@ -51,6 +60,9 @@ impl AppError {
             Self::PermissionDenied(pid) => ("permissionDenied", Some(*pid), None),
             Self::Signal { pid, source } => ("signal", Some(*pid), Some(source.to_string())),
             Self::Task(msg) => ("task", None, Some(msg.clone())),
+            Self::OpenFailed(msg) => ("openFailed", None, Some(msg.clone())),
+            Self::InvalidPath(path) => ("invalidPath", None, Some(path.clone())),
+            Self::ClipboardFailed(msg) => ("clipboardFailed", None, Some(msg.clone())),
         };
         ErrorPayload { code, pid, detail }
     }

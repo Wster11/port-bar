@@ -14,6 +14,9 @@ const zhErrors: ErrorMessages = {
     `权限不足，无法结束 PID ${e.pid}（进程属于其他用户或系统，需要管理员权限）`,
   signal: (e) => `发送信号失败 (PID ${e.pid})：${e.detail ?? ""}`,
   task: (e) => `后台任务异常：${e.detail ?? ""}`,
+  openFailed: (e) => `打开失败：${e.detail ?? ""}`,
+  invalidPath: (e) => `目录不存在：${e.detail ?? ""}`,
+  clipboardFailed: (e) => `复制失败：${e.detail ?? ""}`,
 };
 
 const zh = {
@@ -31,6 +34,16 @@ const zh = {
   unknownProcess: "未知进程",
   emptyNoMatch: "没有匹配的结果",
   emptyNone: "当前没有正在监听的端口",
+  copyUrl: "复制 URL",
+  copyPort: "复制端口",
+  copyPid: "复制 PID",
+  copyCommand: "复制启动命令",
+  copyPath: "复制目录路径",
+  revealInFinder: "在 Finder 中显示",
+  killEllipsis: "结束进程…",
+  copied: "已复制到剪贴板",
+  openInBrowser: (port: number) => `在浏览器中打开 localhost:${port}`,
+  openPortHint: (port: number) => `点击在浏览器中打开 http://localhost:${port}，右键查看更多`,
   notInTauri:
     "当前页面不在 Tauri 窗口中运行（请用 `pnpm tauri dev` 启动，并点击菜单栏图标打开，而不是在浏览器访问 localhost:1420）",
   summary: (ports: number, processes: number) => `${ports} 个端口 · ${processes} 个进程`,
@@ -58,6 +71,16 @@ const en: Messages = {
   unknownProcess: "Unknown process",
   emptyNoMatch: "No matching results",
   emptyNone: "No ports are being listened on",
+  copyUrl: "Copy URL",
+  copyPort: "Copy Port",
+  copyPid: "Copy PID",
+  copyCommand: "Copy Command",
+  copyPath: "Copy Directory Path",
+  revealInFinder: "Show in Finder",
+  killEllipsis: "Kill Process…",
+  copied: "Copied to clipboard",
+  openInBrowser: (port) => `Open localhost:${port} in Browser`,
+  openPortHint: (port) => `Click to open http://localhost:${port} in your browser; right-click for more`,
   notInTauri:
     "Not running inside the Tauri window. Start with `pnpm tauri dev` and open it from the menu bar icon instead of visiting localhost:1420 in a browser.",
   summary: (ports, processes) =>
@@ -75,6 +98,9 @@ const en: Messages = {
       `Permission denied for PID ${e.pid} (owned by another user or the system; requires admin rights)`,
     signal: (e) => `Failed to send signal (PID ${e.pid}): ${e.detail ?? ""}`,
     task: (e) => `Background task failed: ${e.detail ?? ""}`,
+    openFailed: (e) => `Failed to open: ${e.detail ?? ""}`,
+    invalidPath: (e) => `Directory does not exist: ${e.detail ?? ""}`,
+    clipboardFailed: (e) => `Failed to copy: ${e.detail ?? ""}`,
   },
 };
 

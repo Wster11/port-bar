@@ -6,6 +6,9 @@ export interface ListeningPort {
   pid: number;
   processName: string;
   user: string;
+  /** Full command line; empty if unreadable. */
+  command: string;
+  cwd: string | null;
 }
 
 /** Mirrors `ports::KillOutcome` in src-tauri/src/ports.rs. */
@@ -19,7 +22,10 @@ export type AppErrorCode =
   | "noSuchProcess"
   | "permissionDenied"
   | "signal"
-  | "task";
+  | "task"
+  | "openFailed"
+  | "invalidPath"
+  | "clipboardFailed";
 
 export interface AppErrorPayload {
   code: AppErrorCode;
@@ -32,6 +38,8 @@ export interface ProcessGroup {
   pid: number;
   processName: string;
   user: string;
+  command: string;
+  cwd: string | null;
   /** Unique port numbers, ascending, each with every address it listens on. */
   ports: { port: number; addresses: string[] }[];
 }

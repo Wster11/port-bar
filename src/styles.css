@@ -275,11 +275,45 @@ input:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.command,
+.cwd {
+  margin-top: 2px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}
+
+.command {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  color: var(--secondary-label);
+}
+
+.cwd {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--secondary-label);
+  opacity: 0.85;
+}
+
+.cwd svg {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  stroke-width: 1.4;
+}
+
+.cwd span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .ports {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 4px;
+  margin-top: 5px;
 }
 
 .pill {
@@ -291,11 +325,25 @@ input:focus-visible {
   color: var(--blue);
   background: color-mix(in srgb, var(--blue) 13%, transparent);
   border-radius: 5px;
+  cursor: pointer;
+  transition: background-color 0.12s var(--ease);
+}
+
+.pill:hover {
+  background: color-mix(in srgb, var(--blue) 24%, transparent);
+}
+
+.pill:active {
+  background: color-mix(in srgb, var(--blue) 32%, transparent);
 }
 
 .pill.more {
   color: var(--secondary-label);
   background: var(--fill-strong);
+}
+
+.pill.more:hover {
+  color: var(--label);
 }
 
 /* ---------- Row actions ---------- */

@@ -2,6 +2,7 @@ mod commands;
 mod error;
 mod locale;
 mod ports;
+mod system;
 mod tray;
 
 use tauri::WindowEvent;
@@ -29,6 +30,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::list_listening_ports,
             commands::kill_process,
+            commands::open_in_browser,
+            commands::reveal_in_finder,
+            commands::copy_to_clipboard,
             commands::system_locale,
             commands::quit_app,
         ])

@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::process::Command;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -19,6 +19,16 @@ pub struct ListeningPort {
     pub pid: i32,
     pub process_name: String,
     pub user: String,
+    /// Full command line (`ps args`); empty if it could not be read.
+    pub command: String,
+    /// Working directory of the process, if readable.
+    pub cwd: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+struct ProcessDetails {
+    command: String,
+    cwd: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -47,8 +57,81 @@ pub fn list_listening_ports() -> AppResult<Vec<ListeningPort>> {
     }
 
     let mut ports = parse_lsof_output(&String::from_utf8_lossy(&output.stdout));
+
+    let pids: Vec<i32> = ports
+        .iter()
+        .map(|p| p.pid)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let details = process_details(&pids);
+    for port in &mut ports {
+        if let Some(d) = details.get(&port.pid) {
+            port.command.clone_from(&d.command);
+            port.cwd.clone_from(&d.cwd);
+        }
+    }
+
     ports.sort_by(|a, b| a.port.cmp(&b.port).then(a.pid.cmp(&b.pid)));
     Ok(ports)
+}
+
+/// Command lines and working directories for `pids`, one `ps` and one `lsof`
+/// call in total. Best-effort: failures leave fields empty instead of failing
+/// the whole listing.
+fn process_details(pids: &[i32]) -> HashMap<i32, ProcessDetails> {
+    let mut details: HashMap<i32, ProcessDetails> = HashMap::new();
+    if pids.is_empty() {
+        return details;
+    }
+    let pid_list = pids.iter().map(i32::to_string).collect::<Vec<_>>().join(",");
+
+    // -ww: never truncate the command line.
+    if let Ok(out) = Command::new("/bin/ps")
+        .args(["-ww", "-o", "pid=,args=", "-p", &pid_list])
+        .output()
+    {
+        for (pid, args) in parse_ps_args(&String::from_utf8_lossy(&out.stdout)) {
+            details.entry(pid).or_default().command = args;
+        }
+    }
+
+    // -a: AND the filters, i.e. only the cwd descriptor of the given pids.
+    if let Ok(out) = Command::new("/usr/sbin/lsof")
+        .args(["-a", "-d", "cwd", "-Fpn", "-p", &pid_list])
+        .output()
+    {
+        for (pid, cwd) in parse_lsof_cwd(&String::from_utf8_lossy(&out.stdout)) {
+            details.entry(pid).or_default().cwd = Some(cwd);
+        }
+    }
+
+    details
+}
+
+/// Parses `ps -o pid=,args=` lines such as `  512 node server.js`.
+fn parse_ps_args(raw: &str) -> Vec<(i32, String)> {
+    raw.lines()
+        .filter_map(|line| {
+            let line = line.trim_start();
+            let (pid, args) = line.split_once(char::is_whitespace).unwrap_or((line, ""));
+            Some((pid.parse().ok()?, args.trim().to_owned()))
+        })
+        .collect()
+}
+
+/// Parses `lsof -a -d cwd -Fpn` output into (pid, cwd) pairs.
+fn parse_lsof_cwd(raw: &str) -> Vec<(i32, String)> {
+    let mut result = Vec::new();
+    let mut pid: Option<i32> = None;
+    for line in raw.lines() {
+        if let Some(value) = line.strip_prefix('p') {
+            pid = value.parse().ok();
+        } else if let (Some(value), Some(pid)) = (line.strip_prefix('n'), pid) {
+            result.push((pid, value.to_owned()));
+        }
+    }
+    result
 }
 
 /// Parses `lsof -F pcLPn` output. Process-level fields (p, c, L) are followed
@@ -88,6 +171,8 @@ fn parse_lsof_output(raw: &str) -> Vec<ListeningPort> {
                         pid,
                         process_name: command.clone(),
                         user: user.clone(),
+                        command: String::new(),
+                        cwd: None,
                     });
                 }
             }
@@ -188,11 +273,35 @@ n127.0.0.1:5432
                 pid: 512,
                 process_name: "node".into(),
                 user: "zhaoliang".into(),
+                command: String::new(),
+                cwd: None,
             }
         );
         assert_eq!(ports[1].address, "::1");
         assert_eq!(ports[2].process_name, "postgres");
         assert_eq!(ports[2].port, 5432);
+    }
+
+    #[test]
+    fn parses_ps_args() {
+        let raw = "  512 node /Users/me/app/node_modules/.bin/next dev\n  777 postgres -D /usr/local/var\n 900\n";
+        assert_eq!(
+            parse_ps_args(raw),
+            vec![
+                (512, "node /Users/me/app/node_modules/.bin/next dev".into()),
+                (777, "postgres -D /usr/local/var".into()),
+                (900, String::new()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_lsof_cwd() {
+        let raw = "p512\nfcwd\nn/Users/me/app\np777\nfcwd\nn/\n";
+        assert_eq!(
+            parse_lsof_cwd(raw),
+            vec![(512, "/Users/me/app".into()), (777, "/".into())]
+        );
     }
 
     #[test]

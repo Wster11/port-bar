@@ -14,8 +14,10 @@ state with process name / PID and can kill the owning process.
   - `types.ts` mirrors Rust structs; `api.ts` is the only place calling `invoke`/`listen`
   - `main.ts` owns state + DOM rendering
   - `i18n.ts` zh/en message bundles; locale comes from the `system_locale` command
+  - `format.ts` pure display helpers (shortened command line, `~` paths)
 - `src-tauri/src/`
-  - `ports.rs` — pure domain logic: `lsof` parsing, signal sending (unit-tested)
+  - `ports.rs` — pure domain logic: `lsof`/`ps` parsing, signal sending (unit-tested)
+  - `system.rs` — open URL / Finder, clipboard; URLs are built in Rust (localhost only)
   - `commands.rs` — thin `#[tauri::command]` wrappers, run work on `spawn_blocking`
   - `tray.rs` — tray icon, menu, panel toggle/positioning
   - `error.rs` — `AppError`, serialized as `{ code, pid?, detail? }`
